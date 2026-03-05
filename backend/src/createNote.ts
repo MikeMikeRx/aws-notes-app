@@ -8,24 +8,37 @@ const doc = DynamoDBDocumentClient.from(client);
 const TABLE = "NotesTable";
 
 export const handler = async (event:any) => {
-    const body = JSON.parse(event.body || {});
+    try {
+        const body = JSON.parse(event.body || {});
 
-    const note = {
-        userId: "demo-user",
-        noteId: randomUUID(),
-        content: body.content,
-        createdAt: new Date().toISOString()
-    };
+        if (!body.content) {
+            return { statusCode: 400, body: JSON.stringify({ message: "content rquired" }) };
+        }
 
-    await doc.send(
-        new PutCommand({
-            TableName: TABLE,
-            Item: note
-        })
-    );
+        const note = {
+            userId: "demo-user",
+            noteId: randomUUID(),
+            content: body.content,
+            createdAt: new Date().toISOString()
+        };
 
-    return {
-        statusCode: 200,
-        body: JSON.stringify(note)
-    };
+        await doc.send(
+            new PutCommand({
+                TableName: TABLE,
+                Item: note
+            })
+        );
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify(note)
+        };
+    } catch (error) {
+        console.error(error);
+
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: "internal error" })
+        };
+    }
 };
