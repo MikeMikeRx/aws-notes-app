@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 const client = new DynamoDBClient({});
 const doc = DynamoDBDocumentClient.from(client);
 
-const TABLE = "NotesTable";
+const TABLE = process.env.TABLE_NAME!;
 
 export const handler = async (event:any) => {
     try {
