@@ -29,7 +29,18 @@ export class InfraStack extends cdk.Stack {
       timeout: Duration.seconds(10),
     });
 
+    const listNotesFn = new lambda.Function(this, "ListNotesFn", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "listNotes.handler",
+      code: lambda.Code.fromAsset("../backend/dist"),
+      environment: {
+        TABLE_NAME: table.tableName,
+      },
+      timeout: Duration.seconds(10),
+    });
+
     table.grantWriteData(createNoteFn);
+    table.grantReadData(listNotesFn);
 
     const httpApi = new apigwv2.HttpApi(this, "NoteApi", {
       corsPreflight: {
@@ -43,6 +54,12 @@ export class InfraStack extends cdk.Stack {
       path: "/notes",
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration("CreateNoteIntegration", createNoteFn),
+    });
+
+    httpApi.addRoutes({
+      path: "/notes",
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration("ListNotesIntegration", listNotesFn),
     });
 
     new cdk.CfnOutput(this, "NotesTableName", { value: table.tableName });
