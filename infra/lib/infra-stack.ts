@@ -4,11 +4,26 @@ import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as authorizers from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { Construct } from "constructs";
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    const userPool = new cognito.UserPool(this, "NotesUserPool", {
+      selfSignUpEnabled: true,
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+    });
+
+    const userPoolClient = new cognito.UserPoolClient(this, "NoteUserPoolClient", {
+      userPool,
+      authFlows: {
+        userPassword: true,
+      },
+    });
 
     const table = new dynamodb.Table(this, "NotesTable", {
       tableName: "NotesTable",
@@ -64,6 +79,14 @@ export class InfraStack extends cdk.Stack {
     table.grantWriteData(delteNoteFn);
     table.grantWriteData(updateNoteFn);
 
+    const authorizer = new authorizers.HttpUserPoolAuthorizer(
+      "NotesAuthorizer",
+      userPool,
+      {
+        userPoolClients: [userPoolClient],
+      }
+    );
+
     const httpApi = new apigwv2.HttpApi(this, "NoteApi", {
       corsPreflight: {
         allowHeaders: ["Authorization", "Content-Type"],
@@ -81,24 +104,28 @@ export class InfraStack extends cdk.Stack {
       path: "/notes",
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration("CreateNoteIntegration", createNoteFn),
+      authorizer,
     });
 
     httpApi.addRoutes({
       path: "/notes",
       methods: [apigwv2.HttpMethod.GET],
       integration: new integrations.HttpLambdaIntegration("ListNotesIntegration", listNotesFn),
+      authorizer,
     });
 
     httpApi.addRoutes({
       path: "/notes/{noteId}",
       methods: [apigwv2.HttpMethod.DELETE],
       integration: new integrations.HttpLambdaIntegration("DeleteNoteIntegration", delteNoteFn),
+      authorizer,
     })
 
     httpApi.addRoutes({
       path: "/notes/{noteId}",
       methods: [apigwv2.HttpMethod.PUT],
       integration: new integrations.HttpLambdaIntegration("UpdateNoteIntegration", updateNoteFn),
+      authorizer,
     });
 
     new cdk.CfnOutput(this, "NotesTableName", { value: table.tableName });
