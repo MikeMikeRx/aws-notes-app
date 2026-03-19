@@ -49,14 +49,30 @@ export class InfraStack extends cdk.Stack {
       timeout: Duration.seconds(10),
     });
 
+    const updateNoteFn = new lambda.Function(this, "UpdateNoteFn", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "updateNote.handler",
+      code: lambda.Code.fromAsset("../backend/dist"),
+      environment: {
+        TABLE_NAME: table.tableName,
+      },
+      timeout: Duration.seconds(10),
+    });
+
     table.grantWriteData(createNoteFn);
     table.grantReadData(listNotesFn);
     table.grantWriteData(delteNoteFn);
+    table.grantWriteData(updateNoteFn);
 
     const httpApi = new apigwv2.HttpApi(this, "NoteApi", {
       corsPreflight: {
         allowHeaders: ["Authorization", "Content-Type"],
-        allowMethods: [apigwv2.CorsHttpMethod.POST],
+        allowMethods: [
+          apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.GET,
+          apigwv2.CorsHttpMethod.DELETE,
+          apigwv2.CorsHttpMethod.PUT,
+        ],
         allowOrigins: ["*"]
       },
     });
@@ -78,6 +94,12 @@ export class InfraStack extends cdk.Stack {
       methods: [apigwv2.HttpMethod.DELETE],
       integration: new integrations.HttpLambdaIntegration("DeleteNoteIntegration", delteNoteFn),
     })
+
+    httpApi.addRoutes({
+      path: "/notes/{noteId}",
+      methods: [apigwv2.HttpMethod.PUT],
+      integration: new integrations.HttpLambdaIntegration("UpdateNoteIntegration", updateNoteFn),
+    });
 
     new cdk.CfnOutput(this, "NotesTableName", { value: table.tableName });
     new cdk.CfnOutput(this, "ApiUrl", { value: httpApi.apiEndpoint });
